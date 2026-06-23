@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuickPhoto Shrinker</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --background: #f9fafb;
+            --card-bg: #ffffff;
+            --text: #111827;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            background: var(--card-bg);
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            margin-top: 0;
+            font-size: 24px;
+            color: var(--primary);
+        }
+
+        .upload-area {
+            border: 2px dashed #cbd5e1;
+            padding: 30px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 20px;
+            transition: border-color 0.2s;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary);
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            color: #64748b;
+            margin-bottom: 20px;
+            background: #f1f5f9;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        button {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--primary-hover);
+        }
+
+        button:disabled {
+            background-color: #cbd5e1;
+            cursor: not-allowed;
+        }
+
+        #preview {
+            max-width: 100%;
+            max-height: 200px;
+            margin-top: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📸 Photo Size Shrinker</h1>
+    <p>Reduce image file size instantly in your browser.</p>
+
+    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+        <p id="uploadText">Click or Drag & Drop your photo here</p>
+        <input type="file" id="fileInput" accept="image/jpeg, image/png, image/webp">
+        <img id="preview" alt="Preview">
+    </div>
+
+    <div class="controls">
+        <label for="quality">Compression Quality: <span id="qualityVal">80%</span></label>
+        <input type="range" id="quality" min="10" max="100" value="80">
+    </div>
+
+    <div class="stats">
+        <div>Original: <span id="origSize">-</span></div>
+        <div>Compressed: <span id="newSize">-</span></div>
+    </div>
+
+    <button id="downloadBtn" disabled>Download Shrunk Photo</button>
+</div>
+
+<script>
+    const fileInput = document.getElementById('fileInput');
+    const qualitySlider = document.getElementById('quality');
+    const qualityVal = document.getElementById('qualityVal');
+    const origSizeText = document.getElementById('origSize');
+    const newSizeText = document.getElementById('newSize');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const preview = document.getElementById('preview');
+    const uploadText = document.getElementById('uploadText');
+
+    let originalFile = null;
+
+    // Format bytes to readable string
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    // Listen for file upload
+    fileInput.addEventListener('change', (e) => {
+        originalFile = e.target.files[0];
+        if (!originalFile) return;
+
+        origSizeText.textContent = formatBytes(originalFile.size);
+        uploadText.style.display = 'none';
+        
+        // Show original image preview
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            preview.src = event.target.result;
+            preview.style.display = 'block';
+            compressImage();
+        };
+        reader.readAsDataURL(originalFile);
+    });
+
+    // Update quality label and re-compress on slider change
+    qualitySlider.addEventListener('input', (e) => {
+        qualityVal.textContent = e.target.value + '%';
+        if (originalFile) compressImage();
+    });
+
+    // The core compression function using HTML5 Canvas
+    function compressImage() {
+        if (!originalFile) return;
+
+        const img = new Image();
+        img.src = preview.src;
+        
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Maintain aspect ratio
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+
+            // Draw image onto canvas
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+            // Get quality multiplier (0.1 to 1.0)
+            const quality = qualitySlider.value / 100;
+
+            // Convert canvas back to a compressed JPEG blob
+            canvas.toBlob((blob) => {
+                if (!blob) return;
+
+                newSizeText.textContent = formatBytes(blob.size);
+                
+                // Create a download link
+                const compressedUrl = URL.createObjectURL(blob);
+                downloadBtn.disabled = false;
+                
+                // Setup download button action
+                downloadBtn.onclick = () => {
+                    const link = document.createElement('a');
+                    link.href = compressedUrl;
+                    // Append "-shrunk" to original filename
+                    const origName = originalFile.name.substring(0, originalFile.name.lastIndexOf('.'));
+                    link.download = `${origName}-shrunk.jpg`;
+                    link.click();
+                };
+            }, 'image/jpeg', quality);
+        };
+    }
+</script>
+
+</body>
+</html>
